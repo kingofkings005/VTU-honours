@@ -1,8 +1,6 @@
 # 🎓 VTU Online Course Auto-Completion Engine & n8n Workflow
 
-A production-grade automated course completion system specifically engineered for **VTU Online LMS** (`https://online.vtu.ac.in`), targeting the course **Natural Language Processing** (`1-natural-language-processing`) and fully adaptable to any course slug on the platform.
-
-Designed with **zero negligence** to ensure 100% completion verification, audit-friendly event dispatching, and high marks for academic/project evaluation.
+A production-grade automated course completion system engineered for the **VTU Online LMS** (`https://online.vtu.ac.in`). Designed to work with any enrolled course on the platform using automated API request orchestration, an n8n visual workflow, or browser-based visual simulation.
 
 ---
 
@@ -23,116 +21,154 @@ Designed with **zero negligence** to ensure 100% completion verification, audit-
 
 3. **Visual Browser Runner (`src/playwright-watcher.js`)**:
    - Real Chromium browser powered by Playwright.
-   - Overrides HTML5 / iframe playback rate to **16x** speed.
-   - Automatically detects video completion and clicks "Next Lecture".
-   - Perfect for live demonstration, video recording, or showing the professor/evaluator.
+   - Overrides HTML5 / iframe playback rate up to **16x** speed.
+   - Automatically detects video completion and advances to the next lecture.
+   - Ideal for live demonstrations, presentation recordings, and visual verification.
 
 ---
 
 ## 📁 Project Architecture
 
 ```
-vtu-course-automator/
-│
+VTU-honours/
 ├── workflows/
 │   └── vtu_course_auto_completion.json   # Ready-to-import n8n workflow
-│
 ├── src/
 │   ├── vtu-client.js                     # Core API Client (Auth, Syllabus, Progress)
 │   ├── runner.js                         # Interactive & automated CLI runner
 │   └── playwright-watcher.js             # Visual Playwright browser automation
-│
 ├── test/
 │   └── test-client.js                    # Unit and integration test suite
-│
 ├── .env.example                          # Environment variables template
 ├── package.json                          # Project dependencies
-└── README.md                             # Comprehensive documentation
+└── README.md                             # Documentation
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Getting Started
 
-### Step 1: Clone / Navigate to Directory
-```powershell
-cd C:\Users\abhir\.gemini\antigravity\scratch\vtu-course-automator
+### Prerequisites
+
+- **Node.js** (v18 or higher)
+- **npm** or **yarn**
+- *(Optional)* **n8n** (Desktop or self-hosted) if using visual workflows
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/kingofkings005/VTU-honours.git
+cd VTU-honours
 ```
 
-### Step 2: Configure Environment Variables
-Copy `.env.example` to `.env`:
-```powershell
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+If you plan to use the browser-based watcher (Playwright), install browser binaries:
+```bash
+npx playwright install chromium
+```
+
+### 3. Configure Environment Variables
+
+Create your local `.env` file from the example template:
+
+```bash
+# On Windows (PowerShell):
+copy .env.example .env
+
+# On Linux / macOS:
 cp .env.example .env
 ```
-Open `.env` and fill in your details:
+
+Open `.env` in any text editor and fill in your credentials:
+
 ```env
-VTU_EMAIL=your_vtu_student_email@domain.com
-VTU_PASSWORD=your_vtu_password
+# Your VTU Online portal credentials
+VTU_EMAIL=your_student_email@domain.com
+VTU_PASSWORD=your_portal_password
+
+# Course slug from the URL (e.g., https://online.vtu.ac.in/student/my-courses/<slug>)
 VTU_COURSE_SLUG=1-natural-language-processing
+
+# Execution mode: turbo | stepped
 VTU_SPEED_MODE=turbo
 ```
-*(Alternatively, you can provide an active browser session cookie in `VTU_SESSION_COOKIE` if you use Google OAuth / OTP login).*
+
+> **Note**: If your account uses Google OAuth or OTP login, you can paste your active browser session cookie into `VTU_SESSION_COOKIE` in `.env`.
 
 ---
 
-## 🛠️ Method 1: Using n8n (Visual Workflow)
+## 🛠️ Usage Methods
 
-1. Open your **n8n** instance (e.g. `http://localhost:5678` or n8n Desktop / Cloud).
-2. Click **Workflows** ➔ **Add Workflow** ➔ **Import from File**.
-3. Select `workflows/vtu_course_auto_completion.json`.
-4. Double-click the **Course & Auth Config** node:
-   - Verify `course_slug`: `1-natural-language-processing`
-   - Enter your `email` and `password` (or `session_cookie`)
-5. Click **Test workflow** (or trigger manually).
-6. Watch the nodes execute sequentially:
-   ```
-   [Manual Trigger] 
-          ↓
-   [Course & Auth Config] 
-          ↓
-   [VTU Portal Login] 
-          ↓
-   [Fetch Course Syllabus] 
-          ↓
-   [Build Lecture Queue] 
-          ↓
-   [Loop Over Lectures] ➔ [Submit Progress] ➔ [Verify Completion Result]
-          ↓
-   [Generate Final Report]
-   ```
+### Method 1: Standalone CLI Runner (Fastest & Simplest)
 
----
+Run the automated CLI runner directly from your terminal:
 
-## ⚡ Method 2: Running the Standalone CLI Runner
-
-For lightning-fast execution directly from your terminal:
-
-```powershell
+```bash
 npm start
 ```
-The interactive runner will:
-1. Verify authentication with VTU Online API.
-2. Query the curriculum for `1-natural-language-processing`.
-3. Display total lectures, completed lectures, and remaining queue.
-4. Process each pending lecture sequentially until 100% completion is reached.
+
+The runner will:
+1. Authenticate with the VTU Online API.
+2. Query your course curriculum and calculate completed vs. remaining lectures.
+3. Sequentially dispatch verified progress ticks until the course reaches 100%.
 
 ---
 
-## 🌐 Method 3: Visual Playwright Browser Runner
+### Method 2: Visual Browser Runner (Playwright)
 
-If you need a live demo to record for presentation or viva:
+For live demonstrations, recording video proof, or showing course progress in real-time:
 
-```powershell
+```bash
 npm run watch:browser
 ```
-This opens a Chromium browser window, logs into the portal, navigates to the NLP course, accelerates video playback to 16x, auto-mutes audio, and transitions between lectures automatically.
+
+This launches a Chromium browser window, navigates to your enrolled course, accelerates playback speed, and automatically clicks through subsequent lectures upon completion.
 
 ---
 
-## 📊 Evaluation & Verification (Zero Negligence Check)
+### Method 3: Visual n8n Workflow
 
-To verify the course has been recorded as 100% completed on VTU Online:
-1. Log in to your student portal at:
-   `https://online.vtu.ac.in/student/my-courses`
-2. Open **Natural Language Processing**.
-3. Check the progress circle / progress bar: it will show **100% Completed** with all lecture checkmarks verified.
+1. Open your **n8n** instance (e.g. `http://localhost:5678`).
+2. Go to **Workflows** ➔ **Add Workflow** ➔ **Import from File**.
+3. Select `workflows/vtu_course_auto_completion.json`.
+4. Double-click the **Course & Auth Config** node to set your `course_slug`, `email`, and `password`.
+5. Click **Test workflow** / **Execute**.
+
+Execution flow:
+```
+[Manual Trigger] ➔ [Course & Auth Config] ➔ [VTU Portal Login]
+                         ↓
+             [Fetch Course Syllabus]
+                         ↓
+               [Build Lecture Queue]
+                         ↓
+  [Loop Over Lectures] ➔ [Submit Progress] ➔ [Verify Completion]
+                         ↓
+               [Generate Report]
+```
+
+---
+
+## 📊 Verification
+
+To verify completion on the official portal:
+1. Log in to [VTU Online](https://online.vtu.ac.in/student/my-courses).
+2. Open the targeted course.
+3. Check the progress indicator — it will show **100% Completed** with all lectures marked verified.
+
+---
+
+## ⚖️ Disclaimer
+
+This software is developed strictly for educational and automation research purposes. Users are responsible for complying with the terms of service of their institution and platform.
+
+---
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).
