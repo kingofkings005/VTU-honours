@@ -1,0 +1,30 @@
+{
+  "name": "vtu-course-automator",
+  "version": "1.0.0",
+  "description": "Automated course watcher and completion workflow for VTU Online LMS (n8n + API + Playwright)",
+  "main": "src/runner.js",
+  "scripts": {
+    "start": "node src/runner.js",
+    "watch:browser": "node src/playwright-watcher.js",
+    "test": "node test/test-client.js"
+  },
+  "keywords": [
+    "n8n",
+    "workflow",
+    "automation",
+    "vtu-online",
+    "lms",
+    "course-completion"
+  ],
+  "author": "VTU Project Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "axios-cookiejar-support": "^5.0.4",
+    "dotenv": "^16.4.7",
+    "tough-cookie": "^4.1.4"
+  },
+  "devDependencies": {
+    "playwright": "latest"
+  }
+}

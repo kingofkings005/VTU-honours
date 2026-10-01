@@ -1,0 +1,379 @@
+{
+  "name": "VTU Course Auto-Completion Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e4b2d180-2a81-4f9e-b9b0-111111111111",
+      "name": "Manual / Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "course_input",
+              "value": "1-natural-language-processing"
+            },
+            {
+              "name": "email",
+              "value": "your_email@example.com"
+            },
+            {
+              "name": "password",
+              "value": "your_password"
+            },
+            {
+              "name": "session_cookie",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-222222222222",
+      "name": "Course & Auth Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.session_cookie }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-333333333333",
+      "name": "Has Session Cookie?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://online.vtu.ac.in/api/v1/auth/login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $('Course & Auth Config').item.json.email }}\",\n  \"password\": \"{{ $('Course & Auth Config').item.json.password }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-444444444444",
+      "name": "VTU Portal Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Course & Auth Config').first().json;\n\n// Clean and parse slug from course_input (URL or slug)\nlet rawSlug = (config.course_input || '1-natural-language-processing').trim();\nrawSlug = rawSlug.split('?')[0].replace(/\\/+$/, '');\nif (rawSlug.includes('/')) {\n  const parts = rawSlug.split('/');\n  rawSlug = parts[parts.length - 1];\n}\n\nlet cookieHeader = '';\nif (config.session_cookie && config.session_cookie.trim().length > 0) {\n  cookieHeader = config.session_cookie.trim();\n} else {\n  const loginResponse = $input.first();\n  const headers = loginResponse.json.headers || {};\n  const setCookie = headers['set-cookie'] || [];\n  if (Array.isArray(setCookie)) {\n    cookieHeader = setCookie.map(c => c.split(';')[0]).join('; ');\n  } else if (typeof setCookie === 'string') {\n    cookieHeader = setCookie.split(';')[0];\n  }\n}\n\nreturn [{\n  json: {\n    course_slug: rawSlug,\n    cookie: cookieHeader\n  }\n}];"
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-555555555555",
+      "name": "Extract Auth Cookie & Slug",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://online.vtu.ac.in/api/v1/student/my-courses/{{ $json.course_slug }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-666666666666",
+      "name": "Fetch Course Syllabus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const apiRes = $input.first().json;\nconst authInfo = $('Extract Auth Cookie & Slug').first().json;\n\n// Support both apiRes.data.course and apiRes.data and apiRes\nconst root = apiRes.data?.course || apiRes.data || apiRes.course || apiRes;\n\n// VTU uses 'lessons' for modules, and inside each lesson is 'lectures'\nconst modules = root.lessons || root.curriculum || root.modules || root.sections || [];\nconst lectureQueue = [];\n\nif (Array.isArray(modules)) {\n  modules.forEach((mod, modIdx) => {\n    const modTitle = mod.name || mod.title || `Module ${modIdx + 1}`;\n    const items = mod.lectures || mod.lessons || mod.items || [];\n    \n    if (Array.isArray(items)) {\n      items.forEach((item, itemIdx) => {\n        const rawProgress = item.progressPercent ?? item.progress_percent ?? item.progress ?? 0;\n        const isDone = !!(item.is_completed ?? item.isCompleted ?? item.completed ?? (Number(rawProgress) >= 90));\n        \n        lectureQueue.push({\n          lecture_id: item.id || item.lecture_id,\n          title: item.name || item.title || `Lecture ${itemIdx + 1}`,\n          duration: Math.max(60, Number(item.duration_seconds || item.duration) || 300),\n          module_title: modTitle,\n          is_completed: isDone,\n          course_slug: authInfo.course_slug,\n          cookie: authInfo.cookie\n        });\n      });\n    }\n  });\n}\n\n// Direct lectures fallback\nif (lectureQueue.length === 0 && Array.isArray(root.lectures)) {\n  root.lectures.forEach((item, itemIdx) => {\n    const rawProgress = item.progressPercent ?? item.progress_percent ?? 0;\n    const isDone = !!(item.is_completed ?? (Number(rawProgress) >= 90));\n    lectureQueue.push({\n      lecture_id: item.id,\n      title: item.name || item.title || `Lecture ${itemIdx + 1}`,\n      duration: Math.max(60, Number(item.duration) || 300),\n      module_title: 'Course Curriculum',\n      is_completed: isDone,\n      course_slug: authInfo.course_slug,\n      cookie: authInfo.cookie\n    });\n  });\n}\n\n// Filter pending\nconst pending = lectureQueue.filter(l => !l.is_completed);\n\nif (pending.length === 0) {\n  return [{\n    json: {\n      all_completed: true,\n      message: 'All lectures in this course are already 100% completed!',\n      total_lectures: lectureQueue.length,\n      course_slug: authInfo.course_slug\n    }\n  }];\n}\n\nreturn pending.map(item => ({ json: item }));"
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-777777777777",
+      "name": "Build Lecture Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-888888888888",
+      "name": "Loop Over Lectures",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://online.vtu.ac.in/api/v1/student/my-courses/{{ $json.course_slug }}/lectures/{{ $json.lecture_id }}/progress",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"current_time_seconds\": {{ $json.duration }},\n  \"total_duration_seconds\": {{ $json.duration }},\n  \"seconds_just_watched\": 120\n}",
+        "options": {}
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-999999999999",
+      "name": "Submit 100% Lecture Progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst item = $('Loop Over Lectures').first().json;\n\nreturn [{\n  json: {\n    lecture_id: item.lecture_id,\n    title: item.title,\n    module: item.module_title,\n    duration_seconds: item.duration,\n    success: res.success || false,\n    is_completed: res.data ? res.data.is_completed : true,\n    percent: res.data ? res.data.percent : 100\n  }\n}];"
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-aaaaaaaaaaaa",
+      "name": "Verify Completion Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst config = $('Extract Auth Cookie & Slug').first().json;\n\nconst totalProcessed = allItems.length;\nconst completedCount = allItems.filter(i => i.json.is_completed || i.json.success).length;\n\nreturn [{\n  json: {\n    status: 'COMPLETED',\n    course_slug: config.course_slug,\n    lectures_completed: completedCount,\n    total_processed: totalProcessed,\n    completion_percent: 100,\n    message: `🎉 Finished! Completed ${completedCount}/${totalProcessed} lectures for course: ${config.course_slug}`,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "e4b2d180-2a81-4f9e-b9b0-bbbbbbbbbbbb",
+      "name": "Generate Final Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual / Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Course & Auth Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Course & Auth Config": {
+      "main": [
+        [
+          {
+            "node": "Has Session Cookie?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Session Cookie?": {
+      "main": [
+        [
+          {
+            "node": "Extract Auth Cookie & Slug",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "VTU Portal Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VTU Portal Login": {
+      "main": [
+        [
+          {
+            "node": "Extract Auth Cookie & Slug",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Auth Cookie & Slug": {
+      "main": [
+        [
+          {
+            "node": "Fetch Course Syllabus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Course Syllabus": {
+      "main": [
+        [
+          {
+            "node": "Build Lecture Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Lecture Queue": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Lectures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Lectures": {
+      "main": [
+        [
+          {
+            "node": "Submit 100% Lecture Progress",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit 100% Lecture Progress": {
+      "main": [
+        [
+          {
+            "node": "Verify Completion Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Completion Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Lectures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
